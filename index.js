@@ -2,17 +2,12 @@ const http = require('http')
 const fs = require('fs')
 const url = require('url')
 const qs = require('querystring');
+const path = require('path');
+const sanitizeHtml = require('sanitize-html');
 
-function templateList(filelist){
-    let list = '<ul>';
-    for(let i=0; i<filelist.length; i++) {
-        list += `<li> <a href="/?id=${filelist[i]}"> ${filelist[i]} </a> </li>`;
-    }
-    list += '</ul>';
-    return list;
-}
-function templateHTML(title, list, body, control){
-    return `
+const template = {
+    HTML: function (title, list, body, control){
+        return `
           <!doctype html>
           <html lang="ko">
           <head>
@@ -28,7 +23,19 @@ function templateHTML(title, list, body, control){
           </body>
           </html>
           `
+    },
+    List: function (filelist){
+        let list = '<ul>';
+        for(let i=0; i<filelist.length; i++) {
+            list += `<li> <a href="/?id=${filelist[i]}"> ${filelist[i]} </a> </li>`;
+        }
+        list += '</ul>';
+        return list;
+    }
 }
+
+
+
 
 const app = http.createServer(function (request, response) {
     const _url = request.url
@@ -39,11 +46,11 @@ const app = http.createServer(function (request, response) {
             const title = 'Welcome'
             const description = 'Hello, Node.js'
             fs.readdir('data/', function (err, data) {
-                const list = templateList(data);
-                const template = templateHTML(title, list, description, `<a href="create">create</a>`);
+                const list = template.List(data);
+                const html = template.HTML(title, list, description, `<a href="create">create</a>`);
 
                 response.writeHead(200)
-                response.end(template)
+                response.end(html)
             })
         } else {
             fs.readdir('data/', function (err, data) {
@@ -52,18 +59,20 @@ const app = http.createServer(function (request, response) {
                     list += `<li> <a href="/?id=${data[i]}"> ${data[i]} </a> </li>`;
                 }
                 list += '</ul>';
-
-                fs.readFile(`data/${queryData.id}`, 'utf8', function (err, description) {
+                const filteredId = path.parse(queryData.id).base;
+                fs.readFile(`data/${filteredId}`, 'utf8', function (err, description) {
                     const title = queryData.id
+                    const sanitizedTitle = sanitizeHtml(title);
+                    const sanitizedDescription = sanitizeHtml(description);
                     //메인 화면에서는 create(새 게시글 작성)만 가능하게
-                    const template = templateHTML(title, list, description,
-                        `<a href="create">create</a> <a href="/update?id=${title}">update</a>
+                    const html = template.HTML(title, list, sanitizedDescription,
+                        `<a href="create">create</a> <a href="/update?id=${sanitizedTitle}">update</a>
                                 <form action="delete_process" method="post">
-                                    <input type="hidden" name="id" value="${title}">
+                                    <input type="hidden" name="id" value="${sanitizedTitle}">
                                     <input type="submit" value="delete">
                                 </form>`);
                     response.writeHead(200)
-                    response.end(template)
+                    response.end(html)
                 })
             });
         }
@@ -71,16 +80,16 @@ const app = http.createServer(function (request, response) {
     else if(pathname === '/create'){
         fs.readdir('data/', function(err, data){
             const title = 'Web - create';
-            const list = templateList(data);
+            const list = template.List(data);
             //특정 게시글을 읽고 있을땐 create(게시글 생성)과 update(수정)을 보이게
-            const template = templateHTML(title, list, `
+            const html = template.HTML(title, list, `
                 <form action="create_process" method="post">
                     <p><input type="text" name="title" placeholder="title"/></p>
                     <p><textarea  name="description" placeholder="description"></textarea></p>
                     <p><input type="submit"/></p>
                 </form>`, '') //글생성 중에는 create,update가 안나오게
             response.writeHead(200);
-            response.end(template);
+            response.end(html);
         })
     }else if (pathname === '/create_process') {
         let body = '';
@@ -99,12 +108,13 @@ const app = http.createServer(function (request, response) {
     }else if(pathname === '/update'){
         //data: 실제 파일리스트 문자열들의 배열(파일이름은 게시글의 제목)
         fs.readdir('data', function(err, data){
+            const filteredId = path.parse(queryData.id).base;
             //description: ㅍㅏ일안의 내용물(게시글의 내용)
-            fs.readFile(`data/${queryData.id}`,'utf-8',function (err, description){
+            fs.readFile(`data/${filteredId}`,'utf-8',function (err, description){
                 const title = queryData.id;
-                const list = templateList(data);
+                const list = template.List(data);
                 //특정 게시글을 읽고 있을땐 create(게시글 생성)과 update(수정)을 보이게
-                const template = templateHTML(title, list, `
+                const html = template.HTML(title, list, `
                             <form action="update_process" method="post">
                             <input type="hidden" name="id" value="${title}">
                                 <p><input type="text" name="title" placeholder="title" value="${title}"/></p>
@@ -112,7 +122,7 @@ const app = http.createServer(function (request, response) {
                                 <p><input type="submit"/></p>
                             </form>`, `<a href="create">create</a> <a href="/update?id=${title}">update</a>`) //글생성 중에는 create,update가 안나오게
                 response.writeHead(200);
-                response.end(template);
+                response.end(html);
             })
         });
     }
@@ -142,7 +152,8 @@ const app = http.createServer(function (request, response) {
         request.on('end', function () {
             const post = qs.parse(body);
             const id = post.id;     //게시글 제목
-            fs.unlink(`data/${id}`, function(err){
+            const filteredId = path.parse(id).base;
+            fs.unlink(`data/${filteredId}`, function(err){
                 response.writeHead(302, {Location: '/'});
                 response.end();
             });
