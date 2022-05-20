@@ -1,3 +1,15 @@
+const express = require('express');
+const app = express();
+
+app.get('/', function (req, res){
+    res.send("/");
+})
+app.get('/page', function (req, res){
+    res.send('/page');
+})
+
+app.listen(3333);
+/*
 const http = require('http')
 const fs = require('fs')
 const url = require('url')
@@ -153,4 +165,4 @@ const app = http.createServer(function (request, response) {
         response.end('Not found')
     }
 })
-app.listen(3333)
+app.listen(3333)*/
