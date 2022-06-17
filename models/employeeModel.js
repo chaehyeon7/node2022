@@ -2,11 +2,11 @@ const mongoose = require('mongoose')
 const Schema = mongoose.Schema
 
 const employeeSchema = new Schema({
-    name: {
-    type: string
+    name : {
+        type: String
     },
     age : {
-        type : Number
+        type: Number
     },
     phone : {
         type: String
